@@ -51,7 +51,7 @@ import org.redisson.liveobject.resolver.LongGenerator;
 import org.redisson.liveobject.resolver.UUIDGenerator;
 
 /**
- *
+ * 分布式实时对象测试
  * @author Rui Gu (https://github.com/jackygurui)
  */
 public class RedissonLiveObjectServiceTest extends BaseTest {
@@ -380,10 +380,11 @@ public class RedissonLiveObjectServiceTest extends BaseTest {
         
         TestIndexed t2 = new TestIndexed("2");
         t2 = s.persist(t2);
+        //此时的t2已经与Redis中的数据保持了同步，以下两步会实时同步至Redis
         t2.setName1("test1");
         t2.setObj(t1);
 
-        Collection<TestIndexed> objects0 = s.find(TestIndexed.class, Conditions.eq("obj", t1.getId()));
+        Collection<TestIndexed> objects0 = s.find(TestIndexed.class, Conditions.eq("obj", t1.getId()));//匹配的时候可以直接根据id进行匹配，应该是和@RId注解有关系
         assertThat(objects0.iterator().next().getId()).isEqualTo(t2.getId());
 
         t2.setObj(null);
@@ -434,15 +435,23 @@ public class RedissonLiveObjectServiceTest extends BaseTest {
         Collection<TestIndexed> objects8 = s.find(TestIndexed.class, Conditions.and(Conditions.in("name1", "test31", "test30"), 
                 Conditions.eq("bool1", true)));
         assertThat(objects8).isEmpty();
+
+        s.delete(t3);
+        s.delete(t4);
     }
-    
+
+    /**
+     * scheme.getName(TestREntity.class, String.class, "name", "1") 这一步获取到的是redis中key的值
+     * 这块测得getMap意义不大，可以使用find来代替
+     * @see #testFind()
+     */
     @Test
     public void testBasics() {
         RLiveObjectService s = redisson.getLiveObjectService();
         TestREntity t = new TestREntity("1");
         t = s.persist(t);
         assertEquals("1", t.getName());
-        
+
         DefaultNamingScheme scheme = new DefaultNamingScheme(redisson.getConfig().getCodec());
         assertTrue(redisson.getMap(scheme.getName(TestREntity.class, String.class, "name", "1")).isExists());
         t.setName("3333");
@@ -454,14 +463,18 @@ public class RedissonLiveObjectServiceTest extends BaseTest {
         assertTrue(redisson.getMap(scheme.getName(TestREntity.class, String.class, "name", "3333")).isExists());
         assertTrue(!redisson.getMap(scheme.getName(TestREntity.class, String.class, "name", "1")).isExists());
         assertEquals("111", redisson.getMap(scheme.getName(TestREntity.class, String.class, "name", "3333")).get("value"));
-        
+
+        s.delete(t);
 //        ((RLiveObject) t).getLiveObjectLiveMap().put("value", "555");
 //        assertEquals("555", redisson.getMap(REntity.DefaultNamingScheme.INSTANCE.getName(TestREntity.class, "name", "3333")).get("value"));
 //        assertEquals("3333", ((RObject) t).getName());//field access takes priority over the implemented interface.
     }
 
+    /**
+     * 测试有问题，key删不掉，而且t2.getValue().get("field") 一打断点就为null
+     */
     @Test
-    public void testLiveObjectWithCollection() {
+    public void testLiveObjectWithMap() {
         RLiveObjectService s = redisson.getLiveObjectService();
         TestREntityWithMap t = new TestREntityWithMap("2");
         t = s.persist(t);
@@ -470,7 +483,8 @@ public class RedissonLiveObjectServiceTest extends BaseTest {
         map.put("field", "123");
         
         TestREntityWithMap t2 = s.get(TestREntityWithMap.class, "2");
-        
+
+        //这一步一打断点就为null，很奇怪，不清楚是什么原因
         assertEquals("123", t2.getValue().get("field"));
         
         TestREntityWithMap t3 = s.get(TestREntityWithMap.class, "2");
@@ -482,13 +496,18 @@ public class RedissonLiveObjectServiceTest extends BaseTest {
         HashMap<String, String> map2 = new HashMap<>();
         map2.put("field", "hello");
         t.setValue(map2);
-        
+
         t3 = s.get(TestREntityWithMap.class, "2");
         assertEquals("hello", t3.getValue().get("field"));
+
+        s.delete(t3);
+        redisson.getKeys().delete(map);
+//        DefaultNamingScheme scheme = new DefaultNamingScheme(redisson.getConfig().getCodec());
+//        redisson.getKeys().delete(scheme.getName(TestREntityWithMap.class, String.class, "field", "hello"));//删不掉
     }
 
     @Test
-    public void testLiveObjectWithRObject() {
+    public void testLiveObjectWithRMap() {
         RLiveObjectService s = redisson.getLiveObjectService();
         TestREntityWithRMap t = new TestREntityWithRMap("2");
         t = s.persist(t);
@@ -504,6 +523,9 @@ public class RedissonLiveObjectServiceTest extends BaseTest {
         assertEquals("333",
                 s.<TestREntityWithRMap>get(TestREntityWithRMap.class, "2")
                 .getValue().get("field"));
+
+        s.delete(t);
+        redisson.getKeys().delete(map);
     }
 
     @Test

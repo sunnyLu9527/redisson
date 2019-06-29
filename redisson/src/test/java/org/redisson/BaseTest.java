@@ -6,6 +6,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.redisson.api.RedissonClient;
+import org.redisson.codec.JsonJacksonCodec;
 import org.redisson.config.Config;
 
 public abstract class BaseTest {
@@ -15,6 +16,7 @@ public abstract class BaseTest {
 
     @BeforeClass
     public static void beforeClass() throws IOException, InterruptedException {
+        System.setProperty("travisEnv","true");
         if (!RedissonRuntimeEnvironment.isTravis) {
             RedisRunner.startDefaultRedisServerInstance();
             defaultRedisson = createInstance();
@@ -36,7 +38,7 @@ public abstract class BaseTest {
     @Before
     public void before() throws IOException, InterruptedException {
         if (RedissonRuntimeEnvironment.isTravis) {
-            RedisRunner.startDefaultRedisServerInstance();
+//            RedisRunner.startDefaultRedisServerInstance();
             redisson = createInstance();
         } else {
             if (redisson == null) {
@@ -62,12 +64,14 @@ public abstract class BaseTest {
 //            redisAddress = "127.0.0.1:6379";
 //        }
         Config config = new Config();
-//        config.setCodec(new MsgPackJacksonCodec());
+        config.setCodec(new JsonJacksonCodec());
 //        config.useSentinelServers().setMasterName("mymaster").addSentinelAddress("127.0.0.1:26379", "127.0.0.1:26389");
 //        config.useClusterServers().addNodeAddress("127.0.0.1:7004", "127.0.0.1:7001", "127.0.0.1:7000");
         config.useSingleServer()
-                .setAddress(RedisRunner.getDefaultRedisServerBindAddressAndPort());
-//        .setPassword("mypass1");
+//                .setAddress(RedisRunner.getDefaultRedisServerBindAddressAndPort());
+                .setAddress("redis://118.31.245.64:30002")
+                .setDatabase(6)
+        .setPassword("dustpan1234@");
 //        config.useMasterSlaveConnection()
 //        .setMasterAddress("127.0.0.1:6379")
 //        .addSlaveAddress("127.0.0.1:6399")
